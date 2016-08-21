@@ -21,6 +21,9 @@ from telnetlib import (  # noqa
 )
 
 
+FOLLOWS = bytes([1])
+
+
 class SslTelnet(Telnet):
     def __init__(self, force_ssl=True, telnet_tls=True, **kwargs):
         """
@@ -39,6 +42,8 @@ class SslTelnet(Telnet):
         time the connection will be secured.
         If both are False, the connection will be plaintext.
         """
+        self.in_tls_wait = False
+        self.tls_write_buffer = b''
         self.secure = False
         self.force_ssl = force_ssl
         self.allow_telnet_tls = telnet_tls
@@ -69,6 +74,12 @@ class SslTelnet(Telnet):
         """
         self.ssltelnet_callback = callback
 
+    def write(self, data):
+        if self.in_tls_wait:
+            self.tls_write_buffer += data
+            return
+        super(SslTelnet, self).write(data)
+
     def _start_tls(self):
         if self.secure:
             return
@@ -79,6 +90,9 @@ class SslTelnet(Telnet):
     def _ssltelnet_opt_cb(self, sock, cmd, opt):
         if cmd == DO and opt == TLS:
             sock.sendall(IAC + (WILL if self.allow_telnet_tls else WONT) + TLS)
+            sock.sendall(IAC + SB + TLS + FOLLOWS + IAC + SE)
+            self.in_tls_wait = True
+            self.tls_write_buffer = b''
             return
         elif cmd in (DO, DONT):
             if self.ssltelnet_callback:
@@ -90,11 +104,19 @@ class SslTelnet(Telnet):
                 self.ssltelnet_callback(sock, cmd, opt)
             else:
                 sock.sendall(IAC + DONT + opt)
-        elif cmd in (SB, SE):
+        elif cmd == SB:
+            if self.ssltelnet_callback:
+                self.ssltelnet_callback(sock, cmd, opt)
+            else:
+                self.msg('IAC %d not recognized' % ord(cmd))
+        elif cmd == SE:
             data = self.read_sb_data()
             if self.allow_telnet_tls and data.startswith(TLS):
                 if data[1:2] == b'\x01':
                     self._start_tls()
+                    self.in_tls_wait = False
+                    self.write(self.tls_write_buffer)
+            self.tls_write_buffer = b''
                 return
             # Dodgy, but restores ability to read_db_data()
             self.sbdataq = data
