@@ -112,12 +112,12 @@ class SslTelnet(Telnet):
         elif cmd == SE:
             data = self.read_sb_data()
             if self.allow_telnet_tls and data.startswith(TLS):
-                if data[1:2] == b'\x01':
+                if data[1:2] == FOLLOWS:
                     self._start_tls()
                     self.in_tls_wait = False
                     self.write(self.tls_write_buffer)
-            self.tls_write_buffer = b''
-                return
+                    self.tls_write_buffer = b''
+                    return
             # Dodgy, but restores ability to read_db_data()
             self.sbdataq = data
             if self.ssltelnet_callback:
