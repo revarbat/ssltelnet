@@ -54,8 +54,8 @@ class SslTelnet(Telnet):
         }
         self.ssl_args = {k: v for k, v in kwargs.items() if k in ssl_argnames}
         telnet_args = {k: v for k, v in kwargs.items() if k not in ssl_argnames}
-        super(SslTelnet, self).__init__(**telnet_args)
-        super(SslTelnet, self).set_option_negotiation_callback(
+        Telnet.__init__(self, **telnet_args)
+        Telnet.set_option_negotiation_callback(self,
             self._ssltelnet_opt_cb)
 
     def open(self, *args, **kwargs):
@@ -63,7 +63,7 @@ class SslTelnet(Telnet):
         Works exactly like the Telnet.open() call from the telnetlib
         module, except SSL/TLS may be transparently negotiated.
         """
-        super(SslTelnet, self).open(*args, **kwargs)
+        Telnet.open(self, *args, **kwargs)
         if self.force_ssl:
             self._start_tls()
 
@@ -78,7 +78,7 @@ class SslTelnet(Telnet):
         if self.in_tls_wait:
             self.tls_write_buffer += data
             return
-        super(SslTelnet, self).write(data)
+        Telnet.write(self, data)
 
     def _start_tls(self):
         if self.secure:
